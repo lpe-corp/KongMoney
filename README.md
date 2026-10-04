@@ -75,6 +75,18 @@ npm run ios
 npm run web
 ```
 
+### Install on iPhone for free
+
+KongMoney can be installed from its website as a Home Screen web app without an Apple Developer account. Build the static site with:
+
+```bash
+npm run build:web
+```
+
+This creates the deployable site in `dist/`, including its Home Screen icons and offline app shell. To publish it for free, import this repository into Vercel; `vercel.json` configures the build command and publish directory. Once deployed over HTTPS, open the site in Safari on the iPhone, tap **Share**, then **Add to Home Screen**.
+
+The web app stores data locally in the browser on that iPhone. It does not sync data to other devices, and clearing Safari website data can remove locally stored data. The offline shell is cached after the first online visit.
+
 ## Available Scripts
 
 ```bash
@@ -82,6 +94,7 @@ npm start        # Start Expo development server
 npm run android  # Run Android app
 npm run ios      # Run iOS app
 npm run web      # Run web version
+npm run build:web # Export a deployable PWA to dist/
 npm run typecheck # Run TypeScript checking
 ```
 

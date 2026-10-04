@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Alert,
+  Alert as NativeAlert,
   Modal,
   Pressable,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -15,17 +16,70 @@ import { AnalyticsPanel } from './src/components/AnalyticsPanel';
 import { BucketDashboard } from './src/components/BucketDashboard';
 import { parseSlipImage } from './src/services/ocrParser';
 import { useKongMoneyStore } from './src/store/useKongMoneyStore';
+import type { AppPalette } from './src/types';
+
+const Alert = {
+  alert(title: string, message?: string, buttons?: Parameters<typeof NativeAlert.alert>[2]) {
+    if (Platform.OS === 'web') {
+      const content = [title, message].filter(Boolean).join('\n\n');
+      if (buttons?.length) {
+        const confirmButton = buttons.find((button) => button.style !== 'cancel');
+        if (window.confirm(content)) {
+          confirmButton?.onPress?.();
+        }
+        return;
+      }
+
+      window.alert(content);
+      return;
+    }
+
+    NativeAlert.alert(title, message, buttons);
+  },
+};
 
 function formatCurrency(amount: number): string {
   return `฿${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
 
+function formatShortDate(date: string): string {
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 type TabKey = 'dashboard' | 'transfer' | 'scanner' | 'recurring' | 'shared' | 'analytics';
+
+interface BucketPickerProps {
+  label: string;
+  buckets: { id: string; name: string; icon: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  palette: AppPalette;
+}
+
+function BucketPicker({ label, buckets, value, onChange, palette }: BucketPickerProps) {
+  return (
+    <View style={styles.pickerGroup}>
+      <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{label}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerOptions}>
+        {buckets.map((bucket) => (
+          <Pressable
+            key={bucket.id}
+            onPress={() => onChange(bucket.id)}
+            style={[styles.pickerOption, { backgroundColor: value === bucket.id ? palette.navActiveSoft : palette.cardSoft, borderColor: value === bucket.id ? palette.primary : palette.border }]}
+          >
+            <Text style={styles.pickerIcon}>{bucket.icon}</Text>
+            <Text style={[styles.pickerOptionText, { color: value === bucket.id ? palette.navActive : palette.text }]}>{bucket.name}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
 
 export default function App() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const palette = isDark
+  const palette: AppPalette = isDark
     ? {
         background: '#0f172a',
         card: '#111827',
@@ -43,6 +97,9 @@ export default function App() {
         secondaryText: '#cbd5e1',
         placeholder: '#94a3b8',
         shadow: '#020617',
+        success: '#34d399',
+        warning: '#fbbf24',
+        danger: '#fb7185',
       }
     : {
         background: '#f4f7fb',
@@ -61,6 +118,9 @@ export default function App() {
         secondaryText: '#1d4ed8',
         placeholder: '#94a3b8',
         shadow: '#0f172a',
+        success: '#16a34a',
+        warning: '#d97706',
+        danger: '#dc2626',
       };
   const buckets = useKongMoneyStore((state) => state.buckets);
   const transactions = useKongMoneyStore((state) => state.transactions);
@@ -79,6 +139,15 @@ export default function App() {
   const resetMonth = useKongMoneyStore((state) => state.resetMonth);
   const lockBucket = useKongMoneyStore((state) => state.lockBucket);
   const getBucketAccessForUser = useKongMoneyStore((state) => state.getBucketAccessForUser);
+
+  const totalBalance = useMemo(() => buckets.reduce((sum, bucket) => sum + bucket.currentBalance, 0), [buckets]);
+  const totalBudget = useMemo(() => buckets.reduce((sum, bucket) => sum + bucket.allocatedBudget, 0), [buckets]);
+  const spentThisMonth = useMemo(
+    () => transactions.filter((transaction) => transaction.type === 'expense').reduce((sum, transaction) => sum + transaction.amount, 0),
+    [transactions],
+  );
+  const lockedCount = buckets.filter((bucket) => bucket.isLocked).length;
+  const firstName = 'Alex';
 
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [selectedFrom, setSelectedFrom] = useState('food');
@@ -370,21 +439,92 @@ export default function App() {
       case 'dashboard':
         return (
           <>
-            <BucketDashboard buckets={buckets} onToggleLock={handleToggleLock} />
-
-            <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
-              <Text style={[styles.sectionTitle, { color: palette.text }]}>Transactions</Text>
-              {transactions.map((transaction) => (
-                <View key={transaction.id} style={[styles.transactionItem, { borderColor: palette.border }]}>
-                  <Text style={[styles.transactionMerchant, { color: palette.text }]}>{transaction.merchantName}</Text>
-                  <Text style={[styles.transactionNote, { color: palette.textMuted }]}>{transaction.note}</Text>
-                  <Text style={[styles.transactionAmount, { color: palette.text }]}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</Text>
-                </View>
-              ))}
+            <View style={styles.greetingRow}>
+              <View>
+                <Text style={[styles.eyebrow, { color: palette.primary }]}>PERSONAL FINANCE</Text>
+                <Text style={[styles.greeting, { color: palette.text }]}>Good evening, {firstName}</Text>
+                <Text style={[styles.greetingSubtitle, { color: palette.textMuted }]}>Here’s your money snapshot.</Text>
+              </View>
+              <View style={[styles.avatar, { backgroundColor: palette.navActiveSoft }]}>
+                <Text style={[styles.avatarText, { color: palette.navActive }]}>A</Text>
+              </View>
             </View>
 
-            <Pressable style={[styles.primaryButton, { backgroundColor: palette.primary }]} onPress={handleResetMonth}>
-              <Text style={[styles.primaryButtonText, { color: palette.primaryText }]}>Run Month Reset</Text>
+            <View style={[styles.balanceCard, { backgroundColor: palette.primary, shadowColor: palette.primary }]}>
+              <View style={styles.balanceCardTop}>
+                <View>
+                  <Text style={styles.balanceLabel}>TOTAL AVAILABLE</Text>
+                  <Text style={styles.balanceValue}>{formatCurrency(totalBalance)}</Text>
+                </View>
+                <View style={styles.onTrackPill}>
+                  <Text style={styles.onTrackText}>● On track</Text>
+                </View>
+              </View>
+              <View style={styles.balanceDivider} />
+              <View style={styles.balanceStats}>
+                <View>
+                  <Text style={styles.balanceStatLabel}>Planned budget</Text>
+                  <Text style={styles.balanceStatValue}>{formatCurrency(totalBudget)}</Text>
+                </View>
+                <View>
+                  <Text style={styles.balanceStatLabel}>Spent this month</Text>
+                  <Text style={styles.balanceStatValue}>{formatCurrency(spentThisMonth)}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.quickActionsHeader}>
+              <Text style={[styles.sectionTitle, { color: palette.text }]}>Quick actions</Text>
+              <Text style={[styles.quickActionsHint, { color: palette.textMuted }]}>{lockedCount} locked</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActions}>
+              {[
+                { icon: '↔', label: 'Move money', tab: 'transfer' as TabKey, color: '#6D5DFB' },
+                { icon: '＋', label: 'Add expense', tab: 'transfer' as TabKey, color: '#F97364' },
+                { icon: '⌁', label: 'Scan slip', tab: 'scanner' as TabKey, color: '#0EA5A4' },
+                { icon: '▣', label: 'View report', tab: 'analytics' as TabKey, color: '#E19A2B' },
+              ].map((action) => (
+                <Pressable key={action.label} onPress={() => setActiveTab(action.tab)} style={[styles.quickAction, { backgroundColor: palette.card, borderColor: palette.border }]}>
+                  <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}18` }]}>
+                    <Text style={[styles.quickActionIconText, { color: action.color }]}>{action.icon}</Text>
+                  </View>
+                  <Text style={[styles.quickActionLabel, { color: palette.text }]}>{action.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <BucketDashboard buckets={buckets} onToggleLock={handleToggleLock} palette={palette} />
+
+            <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
+              <View style={styles.sectionHeaderRow}>
+                <View>
+                  <Text style={[styles.sectionTitle, { color: palette.text }]}>Recent activity</Text>
+                  <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Your latest money movements</Text>
+                </View>
+                <Pressable onPress={() => setActiveTab('analytics')}>
+                  <Text style={[styles.viewAllText, { color: palette.primary }]}>View all</Text>
+                </Pressable>
+              </View>
+              {transactions.slice(0, 5).map((transaction) => {
+                const bucket = buckets.find((item) => item.id === transaction.bucketId);
+                const isIncome = transaction.type === 'income';
+                return (
+                  <View key={transaction.id} style={[styles.transactionItem, { borderColor: palette.border }]}>
+                    <View style={[styles.transactionIcon, { backgroundColor: `${bucket?.categoryColor ?? palette.primary}18` }]}>
+                      <Text>{bucket?.icon ?? '◈'}</Text>
+                    </View>
+                    <View style={styles.transactionCopy}>
+                      <Text style={[styles.transactionMerchant, { color: palette.text }]}>{transaction.merchantName}</Text>
+                      <Text style={[styles.transactionNote, { color: palette.textMuted }]}>{transaction.note} · {formatShortDate(transaction.date)}</Text>
+                    </View>
+                    <Text style={[styles.transactionAmount, { color: isIncome ? palette.success : palette.text }]}>{isIncome ? '+' : '-'}{formatCurrency(transaction.amount)}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Pressable style={[styles.secondaryButton, { backgroundColor: palette.secondary }]} onPress={handleResetMonth}>
+              <Text style={[styles.secondaryButtonText, { color: palette.secondaryText }]}>↻  Run month reset</Text>
             </Pressable>
           </>
         );
@@ -393,22 +533,9 @@ export default function App() {
           <>
             <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
               <Text style={[styles.sectionTitle, { color: palette.text }]}>Smart Transfer</Text>
-              <View style={styles.row}>
-                <TextInput
-                  style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-                  value={selectedFrom}
-                  onChangeText={setSelectedFrom}
-                  placeholder="From bucket"
-                  placeholderTextColor={palette.placeholder}
-                />
-                <TextInput
-                  style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-                  value={selectedTo}
-                  onChangeText={setSelectedTo}
-                  placeholder="To bucket"
-                  placeholderTextColor={palette.placeholder}
-                />
-              </View>
+              <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Move money between your plans</Text>
+              <BucketPicker label="From" buckets={buckets} value={selectedFrom} onChange={setSelectedFrom} palette={palette} />
+              <BucketPicker label="To" buckets={buckets} value={selectedTo} onChange={setSelectedTo} palette={palette} />
               <TextInput
                 style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
                 value={transferAmount}
@@ -424,13 +551,8 @@ export default function App() {
 
             <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
               <Text style={[styles.sectionTitle, { color: palette.text }]}>Manual Entry</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-                value={manualBucketId}
-                onChangeText={setManualBucketId}
-                placeholder="Bucket Id"
-                placeholderTextColor={palette.placeholder}
-              />
+              <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Add a purchase to the right bucket</Text>
+              <BucketPicker label="Bucket" buckets={buckets} value={manualBucketId} onChange={setManualBucketId} palette={palette} />
               <TextInput
                 style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
                 value={manualAmount}
@@ -465,13 +587,8 @@ export default function App() {
         return (
           <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
             <Text style={[styles.sectionTitle, { color: palette.text }]}>Recurring Deductions</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-              value={newRecurringBucketId}
-              onChangeText={setNewRecurringBucketId}
-              placeholder="Bucket id"
-              placeholderTextColor={palette.placeholder}
-            />
+            <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Stay ahead of subscriptions and bills</Text>
+            <BucketPicker label="Charge this bucket" buckets={buckets} value={newRecurringBucketId} onChange={setNewRecurringBucketId} palette={palette} />
             <TextInput
               style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
               value={newRecurringName}
@@ -487,21 +604,21 @@ export default function App() {
               keyboardType="numeric"
               placeholderTextColor={palette.placeholder}
             />
-            <View style={styles.row}>
-              <TextInput
+              <View style={styles.row}>
+                <TextInput
                 style={[styles.input, styles.flexInput, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
                 value={newRecurringNextRunDate}
                 onChangeText={setNewRecurringNextRunDate}
                 placeholder="Next run date"
                 placeholderTextColor={palette.placeholder}
               />
-              <TextInput
-                style={[styles.input, styles.flexInput, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-                value={newRecurringCadence}
-                onChangeText={(value) => setNewRecurringCadence(value === 'weekly' ? 'weekly' : 'monthly')}
-                placeholder="Cadence"
-                placeholderTextColor={palette.placeholder}
-              />
+                <View style={styles.cadencePicker}>
+                  {(['monthly', 'weekly'] as const).map((cadence) => (
+                    <Pressable key={cadence} onPress={() => setNewRecurringCadence(cadence)} style={[styles.cadenceOption, { backgroundColor: newRecurringCadence === cadence ? palette.navActiveSoft : palette.cardSoft }]}>
+                      <Text style={{ color: newRecurringCadence === cadence ? palette.navActive : palette.textMuted, fontSize: 12, fontWeight: '700' }}>{cadence === 'monthly' ? 'Monthly' : 'Weekly'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
             </View>
             <Pressable style={[styles.primaryButton, { backgroundColor: palette.primary }]} onPress={handleAddRecurringDeduction}>
               <Text style={[styles.primaryButtonText, { color: palette.primaryText }]}>Add Recurring Deduction</Text>
@@ -510,15 +627,15 @@ export default function App() {
             {recurringDeductions.length > 0 && (
               <View style={styles.listContainer}>
                 {recurringDeductions.map((deduction) => (
-                  <View key={deduction.id} style={styles.listItem}>
+                  <View key={deduction.id} style={[styles.listItem, { backgroundColor: palette.cardSoft, borderColor: palette.border }]}>
                     <View style={styles.listTextWrap}>
-                      <Text style={styles.listTitle}>{deduction.name}</Text>
-                      <Text style={styles.listMeta}>{deduction.bucketId} • {deduction.cadence}</Text>
-                      <Text style={styles.listMeta}>Next run: {new Date(deduction.nextRunDate).toLocaleDateString()}</Text>
-                      <Text style={styles.listMeta}>Amount: {formatCurrency(deduction.amount)}</Text>
+                      <Text style={[styles.listTitle, { color: palette.text }]}>{deduction.name}</Text>
+                      <Text style={[styles.listMeta, { color: palette.textMuted }]}>{deduction.bucketId} • {deduction.cadence}</Text>
+                      <Text style={[styles.listMeta, { color: palette.textMuted }]}>Next run: {new Date(deduction.nextRunDate).toLocaleDateString()}</Text>
+                      <Text style={[styles.listMeta, { color: palette.textMuted }]}>Amount: {formatCurrency(deduction.amount)}</Text>
                     </View>
-                    <Pressable onPress={() => handleRemoveRecurringDeduction(deduction.id)} style={styles.deleteButton}>
-                      <Text style={styles.deleteButtonText}>Remove</Text>
+                    <Pressable onPress={() => handleRemoveRecurringDeduction(deduction.id)} style={[styles.deleteButton, { backgroundColor: `${palette.danger}18` }]}>
+                      <Text style={[styles.deleteButtonText, { color: palette.danger }]}>Remove</Text>
                     </Pressable>
                   </View>
                 ))}
@@ -534,13 +651,8 @@ export default function App() {
         return (
           <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
             <Text style={[styles.sectionTitle, { color: palette.text }]}>Shared Buckets</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-              value={newSharedBucketId}
-              onChangeText={setNewSharedBucketId}
-              placeholder="Bucket id to share"
-              placeholderTextColor={palette.placeholder}
-            />
+            <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Give trusted people visibility into a plan</Text>
+            <BucketPicker label="Bucket to share" buckets={buckets} value={newSharedBucketId} onChange={setNewSharedBucketId} palette={palette} />
             <TextInput
               style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
               value={newSharedOwnerId}
@@ -562,25 +674,19 @@ export default function App() {
             {sharedBuckets.length > 0 && (
               <View style={styles.listContainer}>
                 {sharedBuckets.map((bucket) => (
-                  <View key={bucket.bucketId} style={styles.listItem}>
+                  <View key={bucket.bucketId} style={[styles.listItem, { backgroundColor: palette.cardSoft, borderColor: palette.border }]}>
                     <View style={styles.listTextWrap}>
-                      <Text style={styles.listTitle}>{bucket.bucketId}</Text>
-                      <Text style={styles.listMeta}>Owner: {bucket.ownerId}</Text>
-                      <Text style={styles.listMeta}>Users: {bucket.sharedWithUserIds.join(', ') || 'None'}</Text>
-                      <Text style={styles.listMeta}>Access: {Object.entries(bucket.memberRoles ?? {}).map(([user, role]) => `${user} (${role})`).join(', ') || 'No roles set'}</Text>
+                      <Text style={[styles.listTitle, { color: palette.text }]}>{bucket.bucketId}</Text>
+                      <Text style={[styles.listMeta, { color: palette.textMuted }]}>Owner: {bucket.ownerId}</Text>
+                      <Text style={[styles.listMeta, { color: palette.textMuted }]}>Users: {bucket.sharedWithUserIds.join(', ') || 'None'}</Text>
+                      <Text style={[styles.listMeta, { color: palette.textMuted }]}>Access: {Object.entries(bucket.memberRoles ?? {}).map(([user, role]) => `${user} (${role})`).join(', ') || 'No roles set'}</Text>
                     </View>
                   </View>
                 ))}
               </View>
             )}
 
-            <TextInput
-              style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-              value={newSharedMemberBucketId}
-              onChangeText={setNewSharedMemberBucketId}
-              placeholder="Bucket id"
-              placeholderTextColor={palette.placeholder}
-            />
+            <BucketPicker label="Add member to" buckets={buckets.filter((bucket) => sharedBuckets.some((shared) => shared.bucketId === bucket.id))} value={newSharedMemberBucketId} onChange={setNewSharedMemberBucketId} palette={palette} />
             <TextInput
               style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
               value={newSharedMemberId}
@@ -603,7 +709,7 @@ export default function App() {
       case 'analytics':
         return (
           <>
-            <AnalyticsPanel buckets={buckets} />
+            <AnalyticsPanel buckets={buckets} palette={palette} />
             <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }] }>
               <Text style={[styles.sectionTitle, { color: palette.text }]}>Bucket Setup</Text>
               <TextInput
@@ -642,7 +748,15 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: palette.background }] }>
       <View style={[styles.header, { backgroundColor: palette.card, borderBottomColor: palette.border }] }>
-        <Text style={[styles.title, { color: palette.text }]}>KongMoney</Text>
+        <View style={styles.brandLockup}>
+          <View style={[styles.brandMark, { backgroundColor: palette.primary }]}>
+            <Text style={styles.brandMarkText}>K</Text>
+          </View>
+          <Text style={[styles.title, { color: palette.text }]}>KongMoney</Text>
+        </View>
+        <Pressable style={[styles.headerAction, { backgroundColor: palette.cardSoft }]} onPress={() => setActiveTab('analytics')}>
+          <Text style={{ color: palette.text, fontSize: 16 }}>⋯</Text>
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={[styles.container, { backgroundColor: palette.background }]}>
@@ -677,13 +791,7 @@ export default function App() {
                 <Text style={{ color: palette.text }}>Amount: {scanResult?.amount ? formatCurrency(scanResult.amount) : '--'}</Text>
                 <Text style={{ color: palette.text }}>Date: {scanResult?.date ?? '--'}</Text>
                 <Text style={{ color: palette.text }}>Reference: {scanResult?.referenceNo ?? '--'}</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
-                  value={scanBucketId}
-                  onChangeText={setScanBucketId}
-                  placeholder="Bucket ID"
-                  placeholderTextColor={palette.placeholder}
-                />
+                <BucketPicker label="Charge this bucket" buckets={buckets} value={scanBucketId} onChange={setScanBucketId} palette={palette} />
                 <TextInput
                   style={[styles.input, { backgroundColor: palette.cardSoft, borderColor: palette.border, color: palette.text }]}
                   value={scanNote}
@@ -712,19 +820,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f4f0',
   },
   container: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 18,
     paddingBottom: 40,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 20,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  brandMark: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandMarkText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  headerAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   section: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -733,11 +867,151 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    marginBottom: 5,
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+  },
+  greetingSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  balanceCard: {
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 22,
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  balanceCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  balanceLabel: {
+    color: 'rgba(255,255,255,0.68)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  balanceValue: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    marginTop: 7,
+  },
+  onTrackPill: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  onTrackText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  balanceDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginVertical: 17,
+  },
+  balanceStats: {
+    flexDirection: 'row',
+    gap: 36,
+  },
+  balanceStatLabel: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 11,
+  },
+  balanceStatValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  quickActionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 11,
+  },
+  quickActionsHint: {
+    fontSize: 12,
+  },
+  quickActions: {
+    gap: 10,
+    paddingBottom: 20,
+  },
+  quickAction: {
+    width: 104,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 11,
+  },
+  quickActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 9,
+  },
+  quickActionIconText: {
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  quickActionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -750,7 +1024,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 9,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
   },
   navItem: {
     flex: 1,
@@ -883,6 +1161,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  pickerGroup: {
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    marginBottom: 8,
+  },
+  pickerOptions: {
+    gap: 8,
+    paddingBottom: 5,
+  },
+  pickerOption: {
+    minWidth: 84,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  pickerIcon: {
+    fontSize: 15,
+  },
+  pickerOptionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cadencePicker: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 10,
+  },
+  cadenceOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingVertical: 13,
+  },
   input: {
     borderColor: '#d9d9d9',
     borderWidth: 1,
@@ -916,18 +1239,33 @@ const styles = StyleSheet.create({
   transactionItem: {
     borderBottomWidth: 1,
     borderColor: '#eee',
-    paddingVertical: 12,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  transactionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  transactionCopy: {
+    flex: 1,
   },
   transactionMerchant: {
     fontWeight: '700',
+    fontSize: 13,
   },
   transactionNote: {
-    color: '#666',
     marginTop: 4,
+    fontSize: 11,
   },
   transactionAmount: {
-    marginTop: 4,
-    fontWeight: '600',
+    fontWeight: '800',
+    fontSize: 13,
+    marginLeft: 8,
   },
   modalBackdrop: {
     flex: 1,

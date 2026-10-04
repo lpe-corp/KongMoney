@@ -58,3 +58,25 @@ export interface SharedBucketAccess {
   bucketId: string;
   role: BucketRole;
 }
+
+export interface AppPalette {
+  background: string;
+  card: string;
+  cardSoft: string;
+  border: string;
+  text: string;
+  textMuted: string;
+  navBar: string;
+  navText: string;
+  navActive: string;
+  navActiveSoft: string;
+  primary: string;
+  primaryText: string;
+  secondary: string;
+  secondaryText: string;
+  placeholder: string;
+  shadow: string;
+  success: string;
+  warning: string;
+  danger: string;
+}

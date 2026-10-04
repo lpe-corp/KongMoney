@@ -5,6 +5,15 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "name": "KongMoney",
+      "shortName": "KongMoney",
+      "themeColor": "#2563eb",
+      "backgroundColor": "#f4f7fb",
+      "display": "standalone",
+      "orientation": "portrait"
+    },
     "assetBundlePatterns": ["**/*"],
     "experiments": {
       "typedRoutes": false

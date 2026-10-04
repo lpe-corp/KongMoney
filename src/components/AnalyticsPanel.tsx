@@ -2,39 +2,41 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
-import type { Bucket } from '../types';
+import type { AppPalette, Bucket } from '../types';
 
 const screenWidth = Dimensions.get('window').width;
 
 interface AnalyticsPanelProps {
   buckets: Bucket[];
+  palette: AppPalette;
 }
 
-export function AnalyticsPanel({ buckets }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ buckets, palette }: AnalyticsPanelProps) {
   const chartData = useMemo(
     () =>
       buckets.map((bucket) => ({
         name: bucket.name,
         population: Math.max(bucket.currentBalance, 0),
         color: bucket.categoryColor,
-        legendFontColor: '#333',
+        legendFontColor: palette.textMuted,
         legendFontSize: 12,
       })),
-    [buckets],
+    [buckets, palette.textMuted],
   );
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Monthly Report</Text>
+    <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }]}>
+      <Text style={[styles.sectionTitle, { color: palette.text }]}>Monthly report</Text>
+      <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Where your available money is sitting</Text>
       <PieChart
         data={chartData}
         width={screenWidth - 32}
         height={220}
         chartConfig={{
-          backgroundColor: '#fff',
-          backgroundGradientFrom: '#fff',
-          backgroundGradientTo: '#fff',
-          color: (opacity = 1) => `rgba(0,0,0, ${opacity})`,
+          backgroundColor: palette.card,
+          backgroundGradientFrom: palette.card,
+          backgroundGradientTo: palette.card,
+          color: (opacity = 1) => `${palette.text}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`,
         }}
         accessor="population"
         backgroundColor="transparent"
@@ -47,10 +49,10 @@ export function AnalyticsPanel({ buckets }: AnalyticsPanelProps) {
 
 const styles = StyleSheet.create({
   section: {
-    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -59,6 +61,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 4,
   },
 });
