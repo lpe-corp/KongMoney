@@ -1,10 +1,13 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BucketIcon } from './BucketIcon';
 import type { AppPalette, Bucket } from '../types';
 
 interface BucketDashboardProps {
   buckets: Bucket[];
   onToggleLock: (bucketId: string, nextState: boolean) => void;
+  onSelectBucket: (bucketId: string) => void;
+  onTransfer: (fromBucketId: string, toBucketId: string) => void;
   palette: AppPalette;
 }
 
@@ -24,16 +27,38 @@ function formatCurrency(amount: number): string {
   return `฿${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
 
-export function BucketDashboard({ buckets, onToggleLock, palette }: BucketDashboardProps) {
+export function BucketDashboard({ buckets, onToggleLock, onSelectBucket, onTransfer, palette }: BucketDashboardProps) {
+  const bucketRefs = React.useRef(new Map<string, View>());
+  const dragArmedBucketId = React.useRef<string | null>(null);
+  const [draggingBucketId, setDraggingBucketId] = React.useState<string | null>(null);
   const totalBalance = buckets.reduce((total, bucket) => total + bucket.currentBalance, 0);
   const totalBudget = buckets.reduce((total, bucket) => total + bucket.allocatedBudget, 0);
+
+  const finishDrag = (fromBucketId: string, x: number, y: number) => {
+    setDraggingBucketId(null);
+    const measurements = buckets.map((bucket) => new Promise<{ bucketId: string; x: number; y: number; width: number; height: number } | null>((resolve) => {
+      const ref = bucketRefs.current.get(bucket.id);
+      if (!ref) {
+        resolve(null);
+        return;
+      }
+      ref.measureInWindow((left, top, width, height) => resolve({ bucketId: bucket.id, x: left, y: top, width, height }));
+    }));
+
+    void Promise.all(measurements).then((positions) => {
+      const destination = positions.find((position) =>
+        position && position.bucketId !== fromBucketId && x >= position.x && x <= position.x + position.width && y >= position.y && y <= position.y + position.height,
+      );
+      if (destination) onTransfer(fromBucketId, destination.bucketId);
+    });
+  };
 
   return (
     <View style={[styles.section, { backgroundColor: palette.card, borderColor: palette.border, shadowColor: palette.shadow }]}>
       <View style={styles.sectionHeader}>
         <View>
           <Text style={[styles.sectionTitle, { color: palette.text }]}>Your buckets</Text>
-          <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Keep every plan on track</Text>
+          <Text style={[styles.sectionSubtitle, { color: palette.textMuted }]}>Hold and drag a bucket to another to start a transfer.</Text>
         </View>
         <View style={[styles.totalPill, { backgroundColor: palette.cardSoft }]}>
           <Text style={[styles.totalPillLabel, { color: palette.textMuted }]}>Available</Text>
@@ -46,10 +71,44 @@ export function BucketDashboard({ buckets, onToggleLock, palette }: BucketDashbo
         const status = getProgressStatus(remainingRate);
 
         return (
-          <View key={bucket.id} style={[styles.bucketCard, { backgroundColor: palette.cardSoft, borderColor: palette.border }]}>
+          <Pressable
+            key={bucket.id}
+            ref={(ref) => {
+              if (ref) bucketRefs.current.set(bucket.id, ref);
+              else bucketRefs.current.delete(bucket.id);
+            }}
+            onPress={() => {
+              if (dragArmedBucketId.current === bucket.id) {
+                dragArmedBucketId.current = null;
+                setDraggingBucketId(null);
+                return;
+              }
+              onSelectBucket(bucket.id);
+            }}
+            delayLongPress={250}
+            onLongPress={() => {
+              if (!bucket.isLocked) {
+                dragArmedBucketId.current = bucket.id;
+                setDraggingBucketId(bucket.id);
+              }
+            }}
+            {...PanResponder.create({
+              onMoveShouldSetPanResponder: (_, gesture) => dragArmedBucketId.current === bucket.id && (Math.abs(gesture.dx) > 8 || Math.abs(gesture.dy) > 8),
+              onPanResponderGrant: () => setDraggingBucketId(bucket.id),
+              onPanResponderRelease: (_, gesture) => finishDrag(bucket.id, gesture.moveX, gesture.moveY),
+              onPanResponderTerminate: () => {
+                dragArmedBucketId.current = null;
+                setDraggingBucketId(null);
+              },
+            }).panHandlers}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${bucket.name} bucket details`}
+            accessibilityHint="Drop onto another bucket to choose a transfer amount"
+            style={[styles.bucketCard, { backgroundColor: palette.cardSoft, borderColor: draggingBucketId && draggingBucketId !== bucket.id ? palette.primary : palette.border, opacity: draggingBucketId === bucket.id ? 0.65 : 1 }]}
+          >
             <View style={styles.bucketHeader}>
               <View style={[styles.bucketIconWrap, { backgroundColor: `${bucket.categoryColor}20` }]}>
-                <Text style={styles.bucketIcon}>{bucket.icon}</Text>
+                <BucketIcon name={bucket.icon} size={20} color={bucket.categoryColor} />
               </View>
               <View style={styles.bucketMeta}>
                 <Text style={[styles.bucketName, { color: palette.text }]}>{bucket.name}</Text>
@@ -58,11 +117,17 @@ export function BucketDashboard({ buckets, onToggleLock, palette }: BucketDashbo
                 </Text>
               </View>
               <Pressable
-                onPress={() => onToggleLock(bucket.id, !bucket.isLocked)}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onToggleLock(bucket.id, !bucket.isLocked);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${bucket.isLocked ? 'Unlock' : 'Lock'} ${bucket.name} bucket`}
+                accessibilityHint={bucket.isLocked ? 'Allows deductions and transfers again' : 'Prevents deductions and transfers'}
                 style={[styles.lockButton, { backgroundColor: bucket.isLocked ? `${palette.danger}18` : palette.card }, bucket.isLocked && styles.lockButtonActive]}
               >
                 <Text style={[styles.lockButtonText, { color: bucket.isLocked ? palette.danger : palette.textMuted }]}>
-                  {bucket.isLocked ? '🔒' : '🔓'}
+                  {bucket.isLocked ? 'Locked' : 'Lock'}
                 </Text>
               </Pressable>
             </View>
@@ -72,12 +137,13 @@ export function BucketDashboard({ buckets, onToggleLock, palette }: BucketDashbo
             </View>
 
             <View style={styles.bucketFooter}>
-              <Text style={[styles.statusPill, { backgroundColor: `${status.color}20`, color: status.color }]}>
-                {status.label}
+              <Text style={[styles.statusPill, { backgroundColor: bucket.isLocked ? `${palette.danger}18` : `${status.color}20`, color: bucket.isLocked ? palette.danger : status.color }]}>
+                {bucket.isLocked ? 'Protected' : status.label}
               </Text>
               <Text style={[styles.remainingText, { color: palette.textMuted }]}>{Math.max(remainingRate, 0).toFixed(0)}% remaining</Text>
             </View>
-          </View>
+            <Text style={[styles.editHint, { color: palette.primary }]}>View details and edit ›</Text>
+          </Pressable>
         );
       })}
       <Text style={[styles.budgetFootnote, { color: palette.textMuted }]}>Total planned budget: {formatCurrency(totalBudget)}</Text>
@@ -161,7 +227,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   lockButton: {
-    width: 34,
+    minWidth: 52,
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
@@ -173,7 +239,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8d7da',
   },
   lockButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   progressTrack: {
@@ -206,5 +272,11 @@ const styles = StyleSheet.create({
   budgetFootnote: {
     fontSize: 12,
     marginTop: 2,
+  },
+  editHint: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 9,
+    textAlign: 'right',
   },
 });
