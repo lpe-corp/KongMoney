@@ -116,7 +116,17 @@ export const useKongMoneyStore = create<KongMoneyState>()(
         })),
       updateBucket: (bucketId, updates) =>
         set((state) => ({
-          buckets: state.buckets.map((bucket) => (bucket.id === bucketId ? { ...bucket, ...updates } : bucket)),
+          buckets: state.buckets.map((bucket) => {
+            if (bucket.id !== bucketId) return bucket;
+
+            const updatedBucket = { ...bucket, ...updates };
+            if (updates.allocatedBudget === undefined) return updatedBucket;
+
+            return {
+              ...updatedBucket,
+              currentBalance: Math.max(0, bucket.currentBalance + updates.allocatedBudget - bucket.allocatedBudget),
+            };
+          }),
         })),
       deleteBucket: (bucketId) =>
         set((state) => ({

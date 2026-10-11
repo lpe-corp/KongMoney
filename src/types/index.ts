@@ -69,6 +69,7 @@ export interface AppPalette {
   navBar: string;
   navText: string;
   navActive: string;
+  navSelected: string;
   navActiveSoft: string;
   primary: string;
   primaryText: string;

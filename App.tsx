@@ -130,6 +130,7 @@ export default function App() {
         navBar: '#0b1220',
         navText: '#94a3b8',
         navActive: '#1d4ed8',
+        navSelected: '#fb8c42',
         navActiveSoft: '#1e3a8a',
         primary: '#60a5fa',
         primaryText: '#f8fafc',
@@ -151,6 +152,7 @@ export default function App() {
         navBar: '#ffffff',
         navText: '#64748b',
         navActive: '#1d4ed8',
+        navSelected: '#e76522',
         navActiveSoft: '#dbeafe',
         primary: '#2563eb',
         primaryText: '#ffffff',
@@ -1410,7 +1412,7 @@ export default function App() {
         <Text style={styles.floatingAddText}>Add</Text>
       </Pressable>
 
-      <View style={[styles.navBar, { backgroundColor: palette.navBar, borderTopColor: palette.border }] }>
+      <View style={[styles.navBar, { backgroundColor: palette.navBar, borderColor: palette.border, shadowColor: palette.shadow }] }>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -1420,13 +1422,10 @@ export default function App() {
               accessibilityRole="tab"
               accessibilityState={{ selected: activeTab === tab.key }}
               accessibilityLabel={`${tab.label} tab`}
-              style={[
-                styles.navItem,
-                activeTab === tab.key && [styles.navItemActive, { backgroundColor: palette.navActiveSoft }],
-              ]}
+              style={styles.navItem}
             >
-              <Icon size={19} color={activeTab === tab.key ? palette.navActive : palette.navText} strokeWidth={2} />
-              <Text style={[styles.navText, { color: activeTab === tab.key ? palette.navActive : palette.navText }]}>{tab.label}</Text>
+              <Icon size={19} color={activeTab === tab.key ? palette.navSelected : palette.navText} strokeWidth={2} />
+              <Text style={[styles.navText, { color: activeTab === tab.key ? palette.navSelected : palette.navText }]}>{tab.label}</Text>
             </Pressable>
           );
         })}
@@ -1897,36 +1896,36 @@ const styles = StyleSheet.create({
   },
   navBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderWidth: 1,
+    borderRadius: 18,
+    width: '94%',
+    marginBottom: 8,
+    maxWidth: 680,
+    alignSelf: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 9,
+    paddingVertical: 5,
     shadowColor: '#000',
     shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -4 },
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
   },
   navItem: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: 50,
+    paddingVertical: 6,
     paddingHorizontal: 4,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  navItemActive: {
-    backgroundColor: '#dbeafe',
+    gap: 4,
   },
   navText: {
     fontSize: 11,
     color: '#64748b',
     fontWeight: '600',
-  },
-  navTextActive: {
-    color: '#1d4ed8',
   },
   flexInput: {
     flex: 1,
